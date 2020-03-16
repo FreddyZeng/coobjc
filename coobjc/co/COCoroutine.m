@@ -154,15 +154,16 @@ static void co_obj_dispose(void *coObj) {
 - (instancetype)initWithBlock:(void (^)(void))block onQueue:(dispatch_queue_t)queue stackSize:(NSUInteger)stackSize {
     self = [super init];
     if (self) {
-        _execBlock = [block copy];
-        _queue = queue ?: co_get_current_queue();
+        _execBlock = [block copy];// 保存block
+        _queue = queue ?: co_get_current_queue(); // 設置隊列
         
         coroutine_t  *co = coroutine_create((void (*)(void *))co_exec);
         if (stackSize > 0 && stackSize < 1024*1024) {   // Max 1M
             co->stack_size = (uint32_t)((stackSize % 16384 > 0) ? ((stackSize/16384 + 1) * 16384) : stackSize);        // Align with 16kb
         }
-        _co = co;
+        _co = co;// OC对象持有结构体
         coroutine_setuserdata(co, (__bridge_retained void *)self, co_obj_dispose);
+        // 设置OC对象为结构体的userdata，并且如果co结构体之前存在userdata，就先释放userdata，OC对象
     }
     return self;
 }
@@ -225,17 +226,19 @@ static void co_obj_dispose(void *coObj) {
 }
 
 - (COCoroutine *)resume {
+    // 获取正在运行的协程，如果是第一个currentCo == nil
     COCoroutine *currentCo = [COCoroutine currentCoroutine];
     BOOL isSubroutine = currentCo.queue == self.queue ? YES : NO;
     dispatch_async(self.queue, ^{
-        if (self.isResume) {
+        if (self.isResume) {// 如果当前的任务已经开始，就不用处理，防止重复
             return;
         }
         if (isSubroutine) {
+            // 如果当前currentCo存在值，就把self添加为它的子任务
             self.parent = currentCo;
             [currentCo addChild:self];
         }
-        self.isResume = YES;
+        self.isResume = YES;// 标记更改为已执行
         coroutine_resume(self.co);
     });
     return self;

@@ -87,7 +87,7 @@ coroutine_scheduler_t *coroutine_scheduler_self_create_if_not_exists(void) {
     
     void *schedule = pthread_getspecific(coroutine_scheduler_key);
     if (!schedule) {
-        schedule = coroutine_scheduler_new();
+        schedule = coroutine_scheduler_new(); // 创建一个新的scheduler
         pthread_setspecific(coroutine_scheduler_key, schedule);
     }
     return schedule;
@@ -132,6 +132,7 @@ coroutine_scheduler_t *coroutine_scheduler_new(void) {
 }
 
 void coroutine_scheduler_free(coroutine_scheduler_t *schedule) {
+    // 对 schedule->main_coroutine 释放co结构体的userdata对象（co OC实例），free co结构体
     coroutine_close_ifdead(schedule->main_coroutine);
 }
 

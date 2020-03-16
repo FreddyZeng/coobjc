@@ -95,6 +95,12 @@ int co_backtrace(void** buffer, int size) {
 }
 
 static BOOL co_isDebuggerAttached() {
+    /*
+     检查 app 是否在debug环境
+     https://stackoverflow.com/questions/4744826/detecting-if-ios-app-is-run-in-debugger
+     https://stackoverflow.com/questions/9145982/what-are-the-arguments-to-sysctl
+     https://unix.stackexchange.com/questions/3586/what-do-the-numbers-in-a-man-page-mean
+     */
     static BOOL debuggerIsAttached = NO;
     
     struct kinfo_proc info;
@@ -124,6 +130,7 @@ void co_rebind_backtrace() {
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
         if (co_isDebuggerAttached()) {
+            // 使用fish hook backtrace函数
             co_rebind_symbols((struct rebinding[1]){{"backtrace", co_backtrace, (void *)&orig_backtrace}}, 1);
         }
     });
