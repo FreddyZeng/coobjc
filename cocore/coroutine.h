@@ -123,9 +123,9 @@ extern "C" {
      One thread own one scheduler, all coroutine run this thread shares it.
      */
     struct coroutine_scheduler {
-        coroutine_t         *main_coroutine;
+        coroutine_t         *main_coroutine;// 这个scheduler的事件处理者
         coroutine_t         *running_coroutine;
-        coroutine_list_t     coroutine_queue;
+        coroutine_list_t     coroutine_queue;// 普通异步任务的co队列
     };
     typedef struct coroutine_scheduler coroutine_scheduler_t;
     

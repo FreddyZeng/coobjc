@@ -78,7 +78,7 @@ id _Nullable co_getspecific(NSString *key) {
 }
 
 static void co_exec(coroutine_t  *co) {
-    
+    // 这个是co写的异步任务执行的代码
     COCoroutine *coObj = co_get_obj(co);
     if (coObj) {
         [coObj execute];
@@ -220,12 +220,15 @@ static void co_obj_dispose(void *coObj) {
 }
 
 - (COCoroutine *)resume {
-    // 获取正在运行的协程，如果是第一个currentCo == nil
+    // 获取正在运行的协程，如果是第一个currentCo == nil,从co结构体从获取userdata OC的co异步任务对象
     COCoroutine *currentCo = [COCoroutine currentCoroutine];
 
-    BOOL isSubroutine = [currentCo.dispatch isEqualToDipatch:self.dispatch] ? YES : NO; // 如果当前的任务已经开始，就不用处理，防止重复
-    [self.dispatch dispatch_async_block:^{
+    BOOL isSubroutine = [currentCo.dispatch isEqualToDipatch:self.dispatch] ? YES : NO;// 如果当前添加的任务和currentCo是同一个队列，那么就把他们用父子关系持有，currentCo是父，后来的都是子，子保存在数组中。当完成才释放内存，为了内存管理，回调block。
+    
+    // 当co异步任务指定执行的队列与当前启动任务的队列不是同一个队列时，就切换到co任务指定的队列启动任务
+    [self.dispatch dispatch_async_block:^{// 异步启动任务
         if (self.isResume) {
+            // 如果当前的任务已经开始，就不用处理，防止重复。存在resume被调用多次的可能。
             return;
         }
         if (isSubroutine) {
