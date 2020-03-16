@@ -20,6 +20,7 @@
 #import "COChan.h"
 #import "coroutine.h"
 #import "co_queue.h"
+#import "coobjc.h"
 
 NSString *const COInvalidException = @"COInvalidException";
 
@@ -127,12 +128,6 @@ static void co_obj_dispose(void *coObj) {
     return [_parameters valueForKey:key];
 }
 
-- (BOOL)isCurrentQueue {
-    if (co_get_current_queue() == self.queue) {
-        return YES;
-    }
-    return NO;
-}
 
 + (COCoroutine *)currentCoroutine {
     return co_get_obj(coroutine_self());
@@ -154,8 +149,8 @@ static void co_obj_dispose(void *coObj) {
 - (instancetype)initWithBlock:(void (^)(void))block onQueue:(dispatch_queue_t)queue stackSize:(NSUInteger)stackSize {
     self = [super init];
     if (self) {
-        _execBlock = [block copy];// 保存block
-        _queue = queue ?: co_get_current_queue(); // 設置隊列
+        _execBlock = [block copy];// 保存任务block
+        _dispatch = queue ? [CODispatch dispatchWithQueue:queue] : [CODispatch currentDispatch]; // // 設置隊列
         
         coroutine_t  *co = coroutine_create((void (*)(void *))co_exec);
         if (stackSize > 0 && stackSize < 1024*1024) {   // Max 1M
@@ -178,24 +173,23 @@ static void co_obj_dispose(void *coObj) {
 }
 
 - (void)performBlockOnQueue:(dispatch_block_t)block {
-    dispatch_queue_t queue = self.queue;
-    if (queue == co_get_current_queue()) {
-        block();
-    } else {
-        dispatch_async(queue, block);
-    }
+    [self.dispatch dispatch_block:block];
 }
 
 - (void)_internalCancel {
+    // dead
+    if (_co == nil) {
+        return;
+    }
     
     if (_isCancelled) {
         return;
     }
     NSArray *subroutines = self.subroutines.copy;;
     if (subroutines.count) {
-        [subroutines enumerateObjectsUsingBlock:^(COCoroutine * _Nonnull obj, NSUInteger idx, BOOL * _Nonnull stop) {
-            [obj cancel];
-        }];
+        for (COCoroutine *subco in subroutines) {
+            [subco cancel];
+        }
     }
     
     _isCancelled = YES;
@@ -207,7 +201,7 @@ static void co_obj_dispose(void *coObj) {
     
     COChan *chan = self.currentChan;
     if (chan) {
-        [chan cancel];
+        [chan cancelForCoroutine:self];
     }
 }
 
@@ -228,9 +222,10 @@ static void co_obj_dispose(void *coObj) {
 - (COCoroutine *)resume {
     // 获取正在运行的协程，如果是第一个currentCo == nil
     COCoroutine *currentCo = [COCoroutine currentCoroutine];
-    BOOL isSubroutine = currentCo.queue == self.queue ? YES : NO;
-    dispatch_async(self.queue, ^{
-        if (self.isResume) {// 如果当前的任务已经开始，就不用处理，防止重复
+
+    BOOL isSubroutine = [currentCo.dispatch isEqualToDipatch:self.dispatch] ? YES : NO; // 如果当前的任务已经开始，就不用处理，防止重复
+    [self.dispatch dispatch_async_block:^{
+        if (self.isResume) {
             return;
         }
         if (isSubroutine) {
@@ -240,13 +235,13 @@ static void co_obj_dispose(void *coObj) {
         }
         self.isResume = YES;// 标记更改为已执行
         coroutine_resume(self.co);
-    });
+    }];
     return self;
 }
 
 - (void)resumeNow {
     COCoroutine *currentCo = [COCoroutine currentCoroutine];
-    BOOL isSubroutine = currentCo.queue == self.queue ? YES : NO;
+    BOOL isSubroutine = [currentCo.dispatch isEqualToDipatch:self.dispatch] ? YES : NO;
     [self performBlockOnQueue:^{
         if (self.isResume) {
             return;
@@ -331,12 +326,10 @@ id co_await(id awaitable) {
              co.lastError = error;
              [chan send_nonblock:nil];
          }];
-
-        [chan onCancel:^(COChan * _Nonnull chan) {
+        
+        id val = [chan receiveWithOnCancel:^(COChan * _Nonnull chan) {
             [promise cancel];
         }];
-        
-        id val = [chan receive];
         return val;
         
     } else {
@@ -358,51 +351,40 @@ NSArray *co_batch_await(NSArray * awaitableList) {
         return nil;
     }
     
-    NSMutableArray *resultAwaitable = [[NSMutableArray alloc] initWithCapacity:awaitableList.count];
-
-    for (id awaitable in awaitableList) {
-        
-        if ([awaitable isKindOfClass:[COChan class]]) {
-            
-            [resultAwaitable addObject:awaitable];
-           
-        } else if ([awaitable isKindOfClass:[COPromise class]]) {
-            
-            COChan *chan = [COChan chanWithBuffCount:1];
-            COCoroutine *co = co_get_obj(t);
-            
-            COPromise *promise = awaitable;
-            [[promise
-              then:^id _Nullable(id  _Nullable value) {
-                  
-                  [chan send_nonblock:value];
-                  return value;
-              }]
-             catch:^(NSError * _Nonnull error) {
-                 co.lastError = error;
-                 [chan send_nonblock:error];
-             }];
-            
-            [chan onCancel:^(COChan * _Nonnull chan) {
-                [promise cancel];
-            }];
-            
-            [resultAwaitable addObject:chan];
-            
-        } else {
-            @throw [NSException exceptionWithName:COInvalidException
-                                           reason:[NSString stringWithFormat:@"Cannot await object: %@.", awaitable]
-                                         userInfo:nil];
-        }
-        
-        
+    uint32_t count = (uint32_t)awaitableList.count;
+    
+    if (count == 0) {
+        return nil;
     }
     
-    NSMutableArray *result = [[NSMutableArray alloc] initWithCapacity:awaitableList.count];
-    for (COChan *chan in resultAwaitable) {
-        id val = co_await(chan);
-        [result addObject:val ? val : [NSNull null]];
+    NSMutableArray *result = [[NSMutableArray alloc] initWithCapacity:count];
+    
+    COChan *chan = [COChan chanWithBuffCount:count];
+    
+    for (int i = 0; i < count; i++) {
+        
+        [result addObject:[NSNull null]];
+        id awaitable = awaitableList[i];
+        
+        // start subroutines
+        co_launch(^{
+            
+            id val = co_await(awaitable);
+            if (!co_isCancelled()) {
+                if (val) {
+                    [result replaceObjectAtIndex:i withObject:val];
+                } else {
+                    NSError *error = co_getError();
+                    if (error) {
+                        [result replaceObjectAtIndex:i withObject:error];
+                    }
+                }
+            }
+            [chan send_nonblock:@(i)];
+        });
     }
+    
+    [chan receiveWithCount:count];
     return result.copy;
 }
 

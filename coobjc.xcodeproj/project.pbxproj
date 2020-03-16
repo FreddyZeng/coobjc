@@ -7,6 +7,10 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		18E16474224CBF1600B277FC /* CODispatch.h in Headers */ = {isa = PBXBuildFile; fileRef = 18E16472224CBF1600B277FC /* CODispatch.h */; settings = {ATTRIBUTES = (Public, ); }; };
+		18E16475224CBF1600B277FC /* CODispatch.m in Sources */ = {isa = PBXBuildFile; fileRef = 18E16473224CBF1600B277FC /* CODispatch.m */; };
+		18E16477224CC56200B277FC /* COCoroutine.h in Headers */ = {isa = PBXBuildFile; fileRef = A372DA9322365AD400EF87AA /* COCoroutine.h */; settings = {ATTRIBUTES = (Public, ); }; };
+		A302BD5C2248D11700411E67 /* COLock.h in Headers */ = {isa = PBXBuildFile; fileRef = A302BD5B2248D11700411E67 /* COLock.h */; };
 		A34A05B1223922ED00F4E9A3 /* cofishhook.c in Sources */ = {isa = PBXBuildFile; fileRef = A34A05B0223922EC00F4E9A3 /* cofishhook.c */; };
 		A34A05B22239235700F4E9A3 /* cofishhook.h in Headers */ = {isa = PBXBuildFile; fileRef = A34A05AF223922EC00F4E9A3 /* cofishhook.h */; };
 		A34A05B42239244A00F4E9A3 /* libc++.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = A34A05B32239244A00F4E9A3 /* libc++.tbd */; };
@@ -31,7 +35,6 @@
 		A372DAA322365AD400EF87AA /* COActorCompletable.m in Sources */ = {isa = PBXBuildFile; fileRef = A372DA8F22365AD400EF87AA /* COActorCompletable.m */; };
 		A372DAA422365AD400EF87AA /* COActor.h in Headers */ = {isa = PBXBuildFile; fileRef = A372DA9022365AD400EF87AA /* COActor.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		A372DAA522365AD400EF87AA /* COChan.h in Headers */ = {isa = PBXBuildFile; fileRef = A372DA9222365AD400EF87AA /* COChan.h */; settings = {ATTRIBUTES = (Public, ); }; };
-		A372DAA622365AD400EF87AA /* COCoroutine.h in Headers */ = {isa = PBXBuildFile; fileRef = A372DA9322365AD400EF87AA /* COCoroutine.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		A372DAA722365AD400EF87AA /* COChan.m in Sources */ = {isa = PBXBuildFile; fileRef = A372DA9422365AD400EF87AA /* COChan.m */; };
 		A372DAA822365AD400EF87AA /* COCoroutine.m in Sources */ = {isa = PBXBuildFile; fileRef = A372DA9522365AD400EF87AA /* COCoroutine.m */; };
 		A372DAAE22365AFE00EF87AA /* coroutine_context.m in Sources */ = {isa = PBXBuildFile; fileRef = A372DAA922365AFE00EF87AA /* coroutine_context.m */; };
@@ -77,8 +80,12 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		18E16472224CBF1600B277FC /* CODispatch.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = CODispatch.h; sourceTree = "<group>"; };
+		18E16473224CBF1600B277FC /* CODispatch.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = CODispatch.m; sourceTree = "<group>"; };
 		539E1B31B66ADA95F4988159 /* libPods-coobjc.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-coobjc.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 		572F70044B408B04A91BE7F2 /* libPods-cocore.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-cocore.a"; sourceTree = BUILT_PRODUCTS_DIR; };
+		6AE2932723053E4D0034D1EC /* Package.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Package.swift; sourceTree = "<group>"; };
+		A302BD5B2248D11700411E67 /* COLock.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = COLock.h; sourceTree = "<group>"; };
 		A34A05AF223922EC00F4E9A3 /* cofishhook.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = cofishhook.h; sourceTree = "<group>"; };
 		A34A05B0223922EC00F4E9A3 /* cofishhook.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = cofishhook.c; sourceTree = "<group>"; };
 		A34A05B32239244A00F4E9A3 /* libc++.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = "libc++.tbd"; path = "Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS12.1.sdk/usr/lib/libc++.tbd"; sourceTree = DEVELOPER_DIR; };
@@ -203,6 +210,8 @@
 				A34A05AF223922EC00F4E9A3 /* cofishhook.h */,
 				A34A05B0223922EC00F4E9A3 /* cofishhook.c */,
 				A372DA792236597700EF87AA /* Info.plist */,
+				18E16472224CBF1600B277FC /* CODispatch.h */,
+				18E16473224CBF1600B277FC /* CODispatch.m */,
 			);
 			path = cocore;
 			sourceTree = "<group>";
@@ -252,6 +261,7 @@
 		A372DA9122365AD400EF87AA /* co */ = {
 			isa = PBXGroup;
 			children = (
+				A302BD5B2248D11700411E67 /* COLock.h */,
 				A372DA9222365AD400EF87AA /* COChan.h */,
 				A372DA9422365AD400EF87AA /* COChan.m */,
 				A372DA9322365AD400EF87AA /* COCoroutine.h */,
@@ -263,6 +273,7 @@
 		D85037C41B9C6D8400864DF0 = {
 			isa = PBXGroup;
 			children = (
+				6AE2932723053E4D0034D1EC /* Package.swift */,
 				D85037D41B9C6D8400864DF0 /* coobjc */,
 				A35C049921EC366A00AC7D6E /* coswift */,
 				A372DA772236597700EF87AA /* cocore */,
@@ -337,6 +348,7 @@
 				A372DA7A2236597700EF87AA /* cocore.h in Headers */,
 				A372DABD22365B0D00EF87AA /* co_csp.h in Headers */,
 				A372DAB222365AFE00EF87AA /* coroutine.h in Headers */,
+				18E16474224CBF1600B277FC /* CODispatch.h in Headers */,
 				A372DAC522365B0D00EF87AA /* co_errors.h in Headers */,
 				A372DAB122365AFE00EF87AA /* coroutine_context.h in Headers */,
 				A372DAC022365B0D00EF87AA /* co_queuedebugging_support.h in Headers */,
@@ -353,12 +365,13 @@
 				A372DA9D22365AD400EF87AA /* COActorChan.h in Headers */,
 				A372DA9C22365AD400EF87AA /* COGenerator.h in Headers */,
 				A372DAA422365AD400EF87AA /* COActor.h in Headers */,
+				A302BD5C2248D11700411E67 /* COLock.h in Headers */,
 				A372DAA022365AD400EF87AA /* COActorCompletable.h in Headers */,
 				A372DA9A22365AD400EF87AA /* coobjc.h in Headers */,
-				A372DAA622365AD400EF87AA /* COCoroutine.h in Headers */,
 				A372DAA522365AD400EF87AA /* COChan.h in Headers */,
 				A372DA9822365AD400EF87AA /* co_tuple.h in Headers */,
 				A34A05B22239235700F4E9A3 /* cofishhook.h in Headers */,
+				18E16477224CC56200B277FC /* COCoroutine.h in Headers */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -450,6 +463,7 @@
 			developmentRegion = English;
 			hasScannedForEncodings = 0;
 			knownRegions = (
+				English,
 				en,
 				Base,
 			);
@@ -512,6 +526,7 @@
 				A372DAAF22365AFE00EF87AA /* coroutine_context.s in Sources */,
 				A372DAAE22365AFE00EF87AA /* coroutine_context.m in Sources */,
 				A34A05B1223922ED00F4E9A3 /* cofishhook.c in Sources */,
+				18E16475224CBF1600B277FC /* CODispatch.m in Sources */,
 				A372DAC422365B0D00EF87AA /* co_queuedebugging_support.m in Sources */,
 				A372DAC322365B0D00EF87AA /* co_autorelease.mm in Sources */,
 				A372DAB022365AFE00EF87AA /* coroutine.m in Sources */,

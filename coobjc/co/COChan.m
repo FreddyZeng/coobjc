@@ -19,6 +19,11 @@
 #import "COChan.h"
 #import <cocore/cocore.h>
 #import "COCoroutine.h"
+#import "COLock.h"
+#import "CODispatch.h"
+#import <objc/runtime.h>
+
+static NSString *const kCOChanNilObj = @"kCOChanNilObj";
 
 static void co_chan_custom_resume(coroutine_t *co) {
     [co_get_obj(co) addToScheduler];
@@ -27,11 +32,11 @@ static void co_chan_custom_resume(coroutine_t *co) {
 @interface COChan()
 {
     co_channel *_chan;
-    BOOL _cancelled;
+    dispatch_semaphore_t    _buffLock;
 }
 
 @property(nonatomic, assign) int count;
-@property(nonatomic, copy) COChanOnCancelBlock cancelBlock;
+@property(nonatomic, strong) NSMutableArray *buffList;
 
 @end
 
@@ -39,12 +44,6 @@ static void co_chan_custom_resume(coroutine_t *co) {
 
 - (void)dealloc {
     // free the remain objects in buffer.
-    if (_chan->buffer.count > 0) {
-        for (int i = 0; i < _chan->buffer.count; i++) {
-            void *cacheVal = (void *)(_chan->buffer.arr + i * _chan->buffer.elemsize);
-            __unused id val = (__bridge_transfer id)cacheVal;
-        }
-    }
     if (_chan) {
         chanfree(_chan);
     }
@@ -68,13 +67,18 @@ static void co_chan_custom_resume(coroutine_t *co) {
 - (instancetype)initWithBuffCount:(int32_t)buffCount {
     self = [super init];
     if (self) {
-        _chan = chancreate(sizeof(void *), buffCount, co_chan_custom_resume);
-        _cancelled = NO;
+        _chan = chancreate(sizeof(int8_t), buffCount, co_chan_custom_resume);
+        _buffList = [[NSMutableArray alloc] init];
+        COOBJC_LOCK_INIT(_buffLock);
     }
     return self;
 }
 
 - (void)send:(id)val {
+    [self send:val onCancel:NULL];
+}
+
+- (void)send:(id)val onCancel:(COChanOnCancelBlock)cancelBlock {
     
     // send may blocking current process, so must check in a coroutine.
     COCoroutine *co = [COCoroutine currentCoroutine];
@@ -84,103 +88,154 @@ static void co_chan_custom_resume(coroutine_t *co) {
     }
     
     co.currentChan = self;
-    chansendp(_chan, (__bridge_retained void *)val);
+    IMP custom_exec = imp_implementationWithBlock(^{
+        COOBJC_SCOPELOCK(self->_buffLock);
+        [self.buffList addObject:val ?: kCOChanNilObj];
+    });
+    
+    IMP cancel_exec = NULL;
+    if (cancelBlock) {
+        cancel_exec = imp_implementationWithBlock(^{
+            cancelBlock(self);
+        });
+    }
+    // do send
+    int8_t v = 1;
+    chansend_custom_exec(_chan, &v, custom_exec, cancel_exec);
+    imp_removeBlock(custom_exec);
+    if (cancel_exec) {
+        imp_removeBlock(cancel_exec);
+    }
     co.currentChan = nil;
 }
 
 - (id)receive {
+    return [self receiveWithOnCancel:NULL];
+}
+
+- (id)receiveWithOnCancel:(COChanOnCancelBlock)cancelBlock {
     
     COCoroutine *co = [COCoroutine currentCoroutine];
     if (!co) {
         return nil;
     }
+    
     co.currentChan = self;
-//    co.lastError = nil;
     
-    void *ret = chanrecvp(_chan);
-    
-    co.currentChan = nil;
-    if (ret == NULL) {
-        return nil;
-    } else {
-        id val = (__bridge_transfer id)ret;
-        if ([self isCancelled]) {
-            return nil;
-        } else {
-            return val;
-        }
+    IMP cancel_exec = NULL;
+    if (cancelBlock) {
+        cancel_exec = imp_implementationWithBlock(^{
+            cancelBlock(self);
+        });
     }
+    
+    uint8_t val = 0;
+    int ret = chanrecv_custom_exec(_chan, &val, cancel_exec);
+    if (cancel_exec) {
+        imp_removeBlock(cancel_exec);
+    }
+    co.currentChan = nil;
+    
+    if (ret == CHANNEL_ALT_SUCCESS) {
+        // success
+        do {
+            COOBJC_SCOPELOCK(_buffLock);
+            NSMutableArray *buffList = self.buffList;
+            if (buffList.count > 0) {
+                id obj = buffList.firstObject;
+                [buffList removeObjectAtIndex:0];
+                if (obj == kCOChanNilObj) {
+                    obj = nil;
+                }
+                return obj;
+            } else {
+                return nil;
+            }
+
+        } while(0);
+        
+    } else {
+        // ret not 1, means nothing received or cancelled.
+        return nil;
+    }
+}
+
+- (NSArray *)receiveAll {
+    NSMutableArray *retArray = [[NSMutableArray alloc] init];
+    id obj = [self receive];
+    if (!obj) {
+        return retArray.copy;
+    }
+    [retArray addObject:obj == kCOChanNilObj ? [NSNull null] : obj];
+    while ([COCoroutine isActive] && (obj = [self receive_nonblock])) {
+        [retArray addObject:obj == kCOChanNilObj ? [NSNull null] : obj];
+    }
+    return retArray.copy;
+}
+
+- (NSArray *)receiveWithCount:(NSUInteger)count {
+    NSMutableArray *retArray = [[NSMutableArray alloc] initWithCapacity:count];
+    id obj = nil;
+    NSUInteger currCount = 0;
+    while (currCount < count && [COCoroutine isActive] && (obj = [self receive])) {
+        [retArray addObject:obj == kCOChanNilObj ? [NSNull null] : obj];
+        currCount ++;
+    }
+    return retArray.copy;
 }
 
 - (void)send_nonblock:(id)val {
     
-    channbsendp(_chan, (__bridge_retained void *)val);
+    IMP custom_exec = imp_implementationWithBlock(^{
+        COOBJC_SCOPELOCK(self->_buffLock);
+        [self.buffList addObject:val ?: kCOChanNilObj];
+    });
+    int8_t v = 1;
+    channbsend_custom_exec(_chan, &v, custom_exec);
+    imp_removeBlock(custom_exec);
 }
 
 - (id)receive_nonblock {
     
-    COCoroutine *co = [COCoroutine currentCoroutine];
-    co.lastError = nil;
-    
-    void *ret = NULL;
-    __unused int st = channbrecv(_chan, (void *)&ret);
+    uint8_t val = 0;
+    int ret = channbrecv(_chan, &val);
 
-    if (ret == NULL) {
-        return nil;
-    } else {
-
-        id val = (__bridge_transfer id)ret;
-        if ([self isCancelled]) {
-            return nil;
-        } else {
-            return val;
-        }
-    }
-}
-
-- (void)cancel {
-    
-    if (self.isCancelled) {
-        return;
-    }
-    
-    _cancelled = YES;
-    
-    if (self.cancelBlock) {
-        self.cancelBlock(self);
-    }
-    
-    // releaseing blocking channels.
-    int blockingSend = 0, blockingReceive = 0;
-    if (changetblocking(_chan, &blockingSend, &blockingReceive)) {
+    if (ret == CHANNEL_ALT_SUCCESS) {
         
-        if (blockingSend > 0) {
-            while (blockingSend) {
-                void *ret = NULL;
-                __unused int st = channbrecv(_chan, (void *)&ret);
-                __unused id val = (__bridge_transfer id)ret;
-                blockingSend--;
+        do {
+            COOBJC_SCOPELOCK(_buffLock);
+            NSMutableArray *buffList = self.buffList;
+            if (buffList.count > 0) {
+                id obj = buffList.firstObject;
+                [buffList removeObjectAtIndex:0];
+                if (obj == kCOChanNilObj) {
+                    obj = nil;
+                }
+                return obj;
+            } else {
+                return nil;
             }
-        } else if (blockingReceive > 0) {
-            while (blockingReceive) {
-                id val = nil;
-                channbsendp(_chan, (__bridge_retained void *)val);
-                blockingReceive--;
-            }
-        }
-    } 
+            
+        } while(0);
+        
+    } else {
+        // ret not 1, means nothing received.
+        return nil;
+    }
 }
 
-- (BOOL)isCancelled {
-    return _cancelled;
-}
-
-- (void)onCancel:(COChanOnCancelBlock)onCancelBlock {
-    self.cancelBlock = onCancelBlock;
+- (void)cancelForCoroutine:(COCoroutine *)co {
+    
+    chan_cancel_alt_in_co(co.co);
 }
 
 @end
 
+@interface COTimeChan()
+
+@property (nonatomic, strong) CODispatchTimer *timer;
+
+@end
 
 @implementation COTimeChan
 {
@@ -200,24 +255,18 @@ static void co_chan_custom_resume(coroutine_t *co) {
     [super send_nonblock:val];
 }
 
+- (id)receive {
+    return [self receiveWithOnCancel:^(COChan * _Nonnull chan) {
+        [[(COTimeChan *)chan timer] invalidate];
+    }];
+}
+
 + (instancetype)sleep:(NSTimeInterval)duration {
     COTimeChan *chan = [self chanWithDuration:duration];
     
-    dispatch_queue_t queue = co_get_current_queue();
-    
-    dispatch_source_t timer = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0, queue);
-    dispatch_source_set_timer(timer, dispatch_time(DISPATCH_TIME_NOW, duration * NSEC_PER_SEC), DISPATCH_TIME_FOREVER, 0);
-    dispatch_source_set_event_handler(timer, ^{
-        dispatch_source_cancel(timer);
+    chan.timer = [[CODispatch currentDispatch] dispatch_timer:^{
         [chan send_nonblock:@1];
-    });
-    
-    [chan onCancel:^(COChan * _Nonnull chan) {
-        dispatch_source_cancel(timer);
-    }];
-    
-    dispatch_resume(timer);
-    
+    } interval:duration];
     
     return chan;
 }

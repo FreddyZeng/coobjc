@@ -1,6 +1,6 @@
 //
-//  co_queue.h
-//  coobjc
+//  CODispatch.h
+//  cocore
 //
 //  Copyright © 2018 Alibaba Group Holding Limited All rights reserved.
 //
@@ -16,26 +16,39 @@
 //   See the License for the specific language governing permissions and
 //   limitations under the License.
 
-#ifndef co_queue_h
-#define co_queue_h
-
-#include <stdio.h>
 #import <Foundation/Foundation.h>
 
-/**
- Get the current dispatch_queue_t.
- This is a replacement of `dispatch_get_current_queue()`, since which is deprecated.
- This method may return nil.
+@interface CODispatchTimer : NSObject
 
- @return The current dispatch_queue.
- */
-dispatch_queue_t co_get_current_queue(void);
+@property (nonatomic, strong) dispatch_block_t _Nonnull block;
 
-/**
- check the current queue is equal to q.
- 
- @return YES if the current queue is equal to q, NO ifthe current queue is not equal to q
- */
-BOOL co_is_current_queue_equal(dispatch_queue_t q);
+- (void)invalidate;
 
-#endif /* co_queue_h */
+@end
+
+
+
+
+NS_ASSUME_NONNULL_BEGIN
+
+@interface CODispatch : NSObject
+
++ (instancetype)dispatchWithQueue:(dispatch_queue_t)q;
+
++ (instancetype)currentDispatch;
+
+- (BOOL)isCurrentDispatch;
+
+- (void)dispatch_block:(dispatch_block_t)block;
+
+- (void)dispatch_async_block:(dispatch_block_t)block;
+
+
+- (CODispatchTimer*)dispatch_timer:(dispatch_block_t)block
+                          interval:(NSTimeInterval)interval;
+
+- (BOOL)isEqualToDipatch:(CODispatch*)dispatch;
+
+@end
+
+NS_ASSUME_NONNULL_END

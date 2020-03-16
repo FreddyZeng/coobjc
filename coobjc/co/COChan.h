@@ -20,6 +20,8 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
+@class COCoroutine;
+
 /**
  The channel object.
  
@@ -42,7 +44,7 @@ typedef void (^COChanOnCancelBlock)(COChan *chan);
 /**
  Create a Channel object, and you can set the buffcount.
 
- @param buffCount then max buffer count of the channel.
+ @param buffCount the max buffer count of the channel.
  @return the Channel object
  */
 + (instancetype)chanWithBuffCount:(int32_t)buffCount;
@@ -59,12 +61,23 @@ typedef void (^COChanOnCancelBlock)(COChan *chan);
 /**
  Send a value to the Channel.
  
+ @see send:onCancel:
  @discussion This method may blocking the current process, when there's no one receives and buffer is full.
  So, this method requires calling in a coroutine.
  
  @param val the value send to Channel.
  */
 - (void)send:(Value _Nullable )val;
+
+/**
+ Send a value to the Channel.
+ 
+ Requires calling in a coroutine.
+ 
+ @param val the value send to Channel.
+ @param cancelBlock call back when the coroutine cancels.
+ */
+- (void)send:(Value _Nullable )val onCancel:(COChanOnCancelBlock _Nullable)cancelBlock;
 
 /**
  Receive a value from the Channel, blocking.
@@ -74,6 +87,16 @@ typedef void (^COChanOnCancelBlock)(COChan *chan);
  @return the value received from the channel
  */
 - (Value _Nullable )receive;
+
+/**
+ Receive a value from the Channel, blocking.
+ 
+ @see `receive`
+ 
+ @return the value received from the channel
+ @param cancelBlock call back when the coroutine cancels.
+ */
+- (Value _Nullable )receiveWithOnCancel:(COChanOnCancelBlock _Nullable)cancelBlock;
 
 /**
  Send a value to the Channel, non blocking.
@@ -98,6 +121,29 @@ typedef void (^COChanOnCancelBlock)(COChan *chan);
 - (Value _Nullable)receive_nonblock;
 
 /**
+ Blocking receive all values in the channel.
+ 
+ 1. If no values in channel, blocking waiting for one.
+ 2. If has values in channel, returning all values.
+ 3. If did send nil, the received value in array will be [NSNull null],
+ so you need check the returning value type in array, important!!!
+ 
+ @return the values received.
+ */
+- (NSArray<Value> * _Nonnull)receiveAll;
+
+/**
+ Blocking receive count values in the channel.
+ 
+ 1. It will continue blocking the current coroutine, until receive count objects.
+ 2. If did send nil, the received value in array will be [NSNull null],
+ so you need check the returning value type in array, important!!!
+ 
+ @return the values received.
+ */
+- (NSArray<Value> * _Nonnull)receiveWithCount:(NSUInteger)count;
+
+/**
  Cancel the Channel.
  
  @discussion Why we provide this api?
@@ -105,21 +151,16 @@ typedef void (^COChanOnCancelBlock)(COChan *chan);
  Sometimes, we need cancel a operation, such as a Network Connection. So, a coroutine is cancellable.
  But Channel may blocking the coroutine, so we need cancel the Channel when cancel a coroutine.
  */
-- (void)cancel;
+- (void)cancelForCoroutine:(COCoroutine *)co;
 
-/**
- tell us is the channel is cancelled.
-
- @return isCancelled.
- */
-- (BOOL)isCancelled;
-
-/**
- Set a callback block when the Channel is cancel.
+/** @deprecated This method is not safe. use `send:onCancel:` or `receiveWithOnCancel:`
+ Set a callback block when the Channel cancel current blocking operation(send: or receive:)
+ 
+ Must set before `send:` or `receive:`, or it will not work.
 
  @param onCancelBlock the cancel callback block.
  */
-- (void)onCancel:(COChanOnCancelBlock _Nullable )onCancelBlock;
+// - (void)onCancel:(COChanOnCancelBlock _Nullable )onCancelBlock;
 
 @end
 

@@ -25,32 +25,31 @@ private let co_chan_custom_resume: @convention(c) (UnsafeMutablePointer<coroutin
     }
 }
 
-
 /// Define the Channel
 public class Chan<T> {
     
+    // Define the channel's alt cancel type
     public typealias  ChanOnCancelBlock = (Chan) -> Void
     
-    public var onCancel: ChanOnCancelBlock?
-    public var isCancelled: Bool {
-        get {
-            return cancelled
-        }
-    }
     
     private var buffCount: Int32
     private var cchan: UnsafeMutablePointer<co_channel>
-    private var cancelled: Bool = false
     private var buffList: [T] = []
     private let lock = NSRecursiveLock()
     
+    
+    /// Create a channel with the buffcount.
+    ///
+    /// - Parameter buffCount: the max buffer count of the channel.
     public init(buffCount: Int32) {
         
         self.buffCount = buffCount
-        let eleSize = Int32(MemoryLayout<UInt>.size)
+        let eleSize = Int32(MemoryLayout<Int8>.size)
         cchan = chancreate(eleSize, buffCount, co_chan_custom_resume)
     }
     
+    
+    /// Create a channel with the buffcount 0.
     public convenience init() {
         self.init(buffCount: 0)
     }
@@ -59,55 +58,122 @@ public class Chan<T> {
         chanfree(cchan)
     }
     
+    
+    /// Create a expandable Channel.  the buffer count is expandable, which means,
+    /// `send` will not blocking current process. And, val send to channel will not abandon.
+    /// The bufferCount value is being set to -1.
+    ///
+    /// - Returns: the channel object
     public class func expandable() -> Chan<T> {
         
         return Chan(buffCount: -1)
     }
     
-    public func send(val: T) throws {
+    /// Blocking send a value to the channel.
+    ///
+    /// - Parameter val: the value to send.
+    /// - Throws: COError types
+    public func send(val: T, onCancel: ChanOnCancelBlock? = nil) throws {
         
         if let co = Coroutine.current() {
-            co.chanCancelBlock = {
-                self.cancel()
+            co.chanCancelBlock = { coroutine in
+                self.cancelForCoroutine(co: coroutine)
             }
             
-            lock.lock()
-            buffList.append(val)
-            lock.unlock()
-            chansendul(cchan, 1);
-            co.chanCancelBlock = nil
-            if cancelled {
+            let objcBlock: @convention(block) ()->Void = {
+                self.lock.lock()
+                defer { self.lock.unlock() }
+                self.buffList.append(val)
+            }
+            let custom_exec = imp_implementationWithBlock(objcBlock)
+            
+            var cancel_exec: IMP? = nil
+            if let block = onCancel {
+                let objcBlock1: @convention(block) ()->Void = {
+                    block(self)
+                }
+                cancel_exec = imp_implementationWithBlock(objcBlock1)
+            }
+            
+            defer {
+                imp_removeBlock(custom_exec)
+                if let exec = cancel_exec {
+                    imp_removeBlock(exec)
+                }
+                co.chanCancelBlock = nil
+            }
+            
+            var v: Int8 = 1
+            
+            let ret = chansend_custom_exec(cchan, &v, custom_exec, cancel_exec)
+            
+            if ret == CHANNEL_ALT_ERROR_CANCELLED.rawValue {
                 throw COError.coroutineCancelled
             }
+        } else {
+            throw COError.invalidCoroutine
         }
     }
     
+    /// Non-blocking send a value to the channel
+    ///
+    /// - Parameter val: the value to send.
     public func send_nonblock(val: T) {
         
-        lock.lock()
-        buffList.append(val)
-        lock.unlock()
-        channbsendul(cchan, 1)
+        let objcBlock: @convention(block) ()->Void = {
+            self.lock.lock()
+            defer { self.lock.unlock() }
+            self.buffList.append(val)
+        }
+        let custom_exec = imp_implementationWithBlock(objcBlock)
+        var v: Int8 = 1
+        _ = channbsend_custom_exec(cchan, &v, custom_exec)
+        imp_removeBlock(custom_exec)
     }
     
-    public func receive() throws -> T {
+    /// Blocking receive a value from the channel
+    ///
+    /// - Returns: the received value
+    /// - Throws: COError types
+    public func receive(onCancel: ChanOnCancelBlock? = nil) throws -> T {
         
         if let co = Coroutine.current() {
             
-            co.chanCancelBlock = {
-                self.cancel()
+            co.chanCancelBlock = { coroutine in
+                self.cancelForCoroutine(co: coroutine)
             }
-            let ret = chanrecvul(cchan);
-            co.chanCancelBlock = nil
+            
+            var v: Int8 = 0
+            
+            var cancel_exec: IMP? = nil
+            if let block = onCancel {
+                let objcBlock: @convention(block) ()->Void = {
+                    block(self)
+                }
+                cancel_exec = imp_implementationWithBlock(objcBlock)
+            }
+            
+            defer {
+                if let exec = cancel_exec {
+                    imp_removeBlock(exec)
+                }
+                co.chanCancelBlock = nil
+            }
+            
+            let ret = chanrecv_custom_exec(cchan, &v, cancel_exec)
 
-            if ret == 1 {
+            if ret == CHANNEL_ALT_SUCCESS.rawValue {
                 
-                lock.lock()
-                let obj = buffList.removeFirst()
-                lock.unlock()
-                return obj
-            } else {
+                do {
+                    lock.lock()
+                    defer { lock.unlock() }
+                    let obj = buffList.removeFirst()
+                    return obj
+                }
+            } else if ret == CHANNEL_ALT_ERROR_CANCELLED.rawValue {
                 throw COError.coroutineCancelled
+            } else {
+                throw COError.chanReceiveFailUnknown
             }
             
         } else {
@@ -115,44 +181,65 @@ public class Chan<T> {
         }
     }
     
+    /// Non-blocking receive a value from the channel
+    ///
+    /// - Returns: the receive value or nil.
     public func receive_nonblock() -> T? {
-     
-        let ret = channbrecvul(cchan)
-        if ret == 1 {
-            lock.lock()
-            let obj = buffList.removeFirst()
-            lock.unlock()
-            return obj
+        var v: Int8 = 0
+        let ret = channbrecv(cchan, &v)
+
+        if ret == CHANNEL_ALT_SUCCESS.rawValue {
+            do {
+                lock.lock()
+                defer { lock.unlock() }
+                let obj = buffList.removeFirst()
+                return obj
+            }
         } else {
             return nil
         }
     }
     
-    public func cancel() {
+    /// Blocking receive all values in the channel for now.
+    /// At least receive one value.
+    ///
+    /// - Returns: the values
+    /// - Throws: COError types
+    public func receiveAll() throws -> [T] {
         
-        if cancelled {
-            return
+        var retArray:[T] = []
+        
+        retArray.append(try self.receive())
+        
+        while let obj = self.receive_nonblock() {
+            retArray.append(obj)
         }
-        cancelled = true
+        return retArray
+    }
+    
+    /// Blocking receive count values in the channel.
+    ///
+    /// - Parameter count: the value count will receive.
+    /// - Returns: the values
+    /// - Throws: COError types
+    public func receiveWithCount(count: UInt) throws -> [T] {
         
-        if let cancelBlock = self.onCancel {
-            cancelBlock(self)
+        var retArray:[T] = []
+        var currCount = 0
+        while currCount < count {
+            let obj = try self.receive()
+            retArray.append(obj)
+            currCount += 1
         }
+        return retArray
+    }
+    
+    /// Cancel the channel's current sending or receiving operation
+    /// Why we provide this api?
+    /// Sometimes, we need cancel a operation, such as a Network Connection. So, a coroutine is cancellable.
+    /// But Channel may blocking the coroutine, so we need cancel the Channel when cancel a coroutine.
+    public func cancelForCoroutine(co: Coroutine) {
         
-        var blockingSend:Int32 = 0
-        var blockingReceive:Int32 = 0
-        
-        if (changetblocking(cchan, &blockingSend, &blockingReceive) != 0) {
-            
-            if blockingSend > 0 {
-                for _ in 0..<blockingSend {
-                    chanrecvul(cchan)
-                }
-            } else if blockingReceive > 0 {
-                for _ in 0..<blockingReceive {
-                    chansendul(cchan, 0)
-                }
-            }
-        }
+        chan_cancel_alt_in_co(co.co)
     }
 }

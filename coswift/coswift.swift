@@ -64,11 +64,9 @@ public func await<T>(promise: Promise<T>) throws -> Resolution<T>  {
             }
         }
         
-        chan.onCancel = { (channel) in
+        return try chan.receive(onCancel: { (channel) in
             promise.cancel()
-        }
-        
-        return try chan.receive()
+        })
         
     } else {
         throw COError.invalidCoroutine
@@ -111,4 +109,28 @@ public var co_isActive: Bool {
     get {
         return Coroutine.isActive()
     }
+}
+
+/// co_delay, pause current coroutine seconds.
+///
+/// - Parameter seconds: paused time
+/// - Throws: If coroutine cancel, throws.
+public func co_delay(_ seconds: TimeInterval) throws {
+    let chan = Chan<Int>()
+    
+    let queue = co_get_current_queue()
+    
+    let timer = DispatchSource.makeTimerSource(queue: queue)
+    
+    timer.setEventHandler {
+        timer.cancel()
+        chan.send_nonblock(val: 1)
+    }
+    timer.schedule(deadline: .now() + seconds, repeating: .never)
+    
+    timer.resume()
+    
+    try _ = chan.receive(onCancel: { _ in
+        timer.cancel()
+    })
 }
