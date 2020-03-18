@@ -119,7 +119,6 @@ void coroutine_scheduler_main(coroutine_t *scheduler_co) {
         scheduler->running_coroutine = co;
         // Resume the coroutine
         coroutine_resume_im(co);
-        // 当一个异步任务发生yield的时候，会回到这里。比如stats 从 COROUTINE_READY -> COROUTINE_SUSPEND
         // Set scheduler's current running coroutine to nil.
         scheduler->running_coroutine = nil;
         
@@ -259,7 +258,30 @@ void coroutine_resume(coroutine_t *co) {
         
         if (scheduler->running_coroutine) {
             // resume a sub coroutine.
-            /* 如果scheduler存在正在执行的任务，表明当前的队列有任务在跑，并且当前任务是其它线程向它添加任务任务的。可能是queue设置为并发队列了
+            /*
+             // Set scheduler's current running coroutine.
+             scheduler->running_coroutine = co;
+             // Resume the coroutine
+             coroutine_resume_im(co);// 这里是执行当前任务，如果任务是同步添加到当前队列，scheduler->running_coroutine不会为空
+             // Set scheduler's current running coroutine to nil.
+             scheduler->running_coroutine = nil;
+             */
+            
+            /*
+             从co异步任务中，添加co同步任务，就会来到这里。会挂起主任务从新入队，执行新添加的任务
+             co_launch(^{
+                 NSLog(@"co_launch");
+                 co_launch_now(^{
+                     这里是执行当前任务，如果任务是同步添加到当前队列，scheduler->running_coroutine不会为空
+                     NSLog(@"co_launch_now");
+                 });
+             });
+             co_launch 和 co_launch 的嵌套添加任务，是不会进入这里的，因为是异步添加。
+             co_launch(^{
+                 co_launch(^{
+             
+                 });
+             });
              */
             scheduler_queue_push(scheduler, scheduler->running_coroutine);
             coroutine_yield(scheduler->running_coroutine);
