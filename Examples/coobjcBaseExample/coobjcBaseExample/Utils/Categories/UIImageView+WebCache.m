@@ -34,13 +34,13 @@
     
     objc_setAssociatedObject(self, @selector(setImageWithURL:), url, OBJC_ASSOCIATION_RETAIN);
     
-    co_launch(^{
-        
-        UIImage *image = [[DataService sharedInstance] imageWithURL:url];
-        if ([objc_getAssociatedObject(self, @selector(setImageWithURL:)) isEqualToString:url]) {
-            self.image = image;
-        }
-    });
+//    co_launch(^{
+//        
+//        UIImage *image = [[DataService sharedInstance] imageWithURL:url];
+//        if ([objc_getAssociatedObject(self, @selector(setImageWithURL:)) isEqualToString:url]) {
+//            self.image = image;
+//        }
+//    });
 }
 
 @end

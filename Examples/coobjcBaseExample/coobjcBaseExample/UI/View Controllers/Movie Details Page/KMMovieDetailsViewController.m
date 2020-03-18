@@ -92,32 +92,32 @@
 
 - (void)requestSimilarMovies
 {
-    co_launch(^{
-        NSArray *dataArray = [[KMSimilarMoviesSource similarMoviesSource] getSimilarMovies:self.movieDetails.movieId numberOfPages:@"1"];
-        if (dataArray != nil)
-        {
-            [self processSimilarMoviesData:dataArray];
-        }
-        else
-        {
-            [self.networkLoadingViewController showErrorView];
-        }
-    });
+//    co_launch(^{
+//        NSArray *dataArray = [[KMSimilarMoviesSource similarMoviesSource] getSimilarMovies:self.movieDetails.movieId numberOfPages:@"1"];
+//        if (dataArray != nil)
+//        {
+//            [self processSimilarMoviesData:dataArray];
+//        }
+//        else
+//        {
+//            [self.networkLoadingViewController showErrorView];
+//        }
+//    });
     
 }
 
 - (void)requestMovieDetails
 {
-    co_launch(^{
-        KMMovieDetailsSource* source = [KMMovieDetailsSource movieDetailsSource];
-        KMMovie *movieDetails = [source getMovieDetails:self.movieDetails.movieId];
-        if (movieDetails) {
-            [self processMovieDetailsData:movieDetails];
-        }
-        else{
-            [self.networkLoadingViewController showErrorView];
-        }
-    });
+//    co_launch(^{
+//        KMMovieDetailsSource* source = [KMMovieDetailsSource movieDetailsSource];
+//        KMMovie *movieDetails = [source getMovieDetails:self.movieDetails.movieId];
+//        if (movieDetails) {
+//            [self processMovieDetailsData:movieDetails];
+//        }
+//        else{
+//            [self.networkLoadingViewController showErrorView];
+//        }
+//    });
 }
 
 #pragma mark - Fetched Data Processing

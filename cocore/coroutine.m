@@ -259,8 +259,8 @@ void coroutine_resume(coroutine_t *co) {
         
         if (scheduler->running_coroutine) {
             // resume a sub coroutine.
-            // 如果存在正在执行的任务，就先从新添加到队尾，然后挂起当前这个执行的任务
-            // 挂起正在执行的任务，让新任务有机会被处理
+            /* 如果scheduler存在正在执行的任务，表明当前的队列有任务在跑，并且当前任务是其它线程向它添加任务任务的。可能是queue设置为并发队列了
+             */
             scheduler_queue_push(scheduler, scheduler->running_coroutine);
             coroutine_yield(scheduler->running_coroutine);
         } else {

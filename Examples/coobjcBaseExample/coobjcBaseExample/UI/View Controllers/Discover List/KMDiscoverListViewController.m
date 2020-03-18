@@ -77,18 +77,26 @@
 - (void)requestMovies
 {
     co_launch(^{
-        NSArray *dataArray = [[KMDiscoverSource discoverSource] getDiscoverList:@"1"];
-        [self.refreshControl endRefreshing];
         
-        if (dataArray != nil)
-        {
-            [self processData:dataArray];
+        while (1) {
+            NSLog(@"1");
         }
-        else
-        {
-            [self.networkLoadingViewController showErrorView];
-        }
+        
     });
+    
+//    co_launch(^{
+//        NSArray *dataArray = [[KMDiscoverSource discoverSource] getDiscoverList:@"1"];
+//        [self.refreshControl endRefreshing];
+//        
+//        if (dataArray != nil)
+//        {
+//            [self processData:dataArray];
+//        }
+//        else
+//        {
+//            [self.networkLoadingViewController showErrorView];
+//        }
+//    });
 }
 
 #pragma mark - Fetched Data Processing

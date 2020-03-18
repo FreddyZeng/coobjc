@@ -85,115 +85,115 @@
     if (self) {
         NSArray *paths = NSSearchPathForDirectoriesInDomains(NSCachesDirectory, NSUserDomainMask, YES);
         _cachePath = [paths[0] stringByAppendingPathComponent:@"coobjc_cache"];
-        _networkQueue = dispatch_queue_create("com.coobjc.network", NULL);
-        _jsonQueue = dispatch_queue_create("com.coobjc.json", NULL);
-        _cacheQueue = dispatch_queue_create("com.coobjc.cache", NULL);
-        _imageQueue = dispatch_queue_create("com.coobjc.image", NULL);
-        _networkActor = co_actor_onqueue(_networkQueue, ^(COActorChan *channel) {
-            for (COActorMessage *message in channel) {
-                NSString *url = [message stringType];
-                if (url.length > 0) {
-                    message.complete(await([self _getDataWithURL:url]));
-                }
-                else{
-                    message.complete(nil);
-                }
-            }
-        });
-        
-        _cacheActor = co_actor_onqueue(_cacheQueue, ^(COActorChan *channel) {
-            for (COActorMessage *message in channel) {
-                NSDictionary *dict = [message dictType];
-                NSString *type = dict[@"type"];
-                if ([type isEqualToString:@"save"]) {
-                    NSString *identifier = dict[@"id"];
-                    NSData *data = dict[@"data"];
-                    NSString *fileName = [self cachedFileNameForKey:identifier];
-                    NSString *filePath = [self cachePathForFileName:fileName];
-                    if (fileName.length > 0 && data.length > 0) {
-                        if (![[NSFileManager defaultManager] fileExistsAtPath:self.cachePath]) {
-                            [[NSFileManager defaultManager] createDirectoryAtPath:self.cachePath withIntermediateDirectories:NO attributes:nil error:nil];
-                        }
-                        [data writeToFile:filePath atomically:YES];
-                    }
-                }
-                else if ([type isEqualToString:@"load"]) {
-                    NSString *identifier = dict[@"id"];
-                    NSString *fileName = [self cachedFileNameForKey:identifier];
-                    NSString *filePath = [self cachePathForFileName:fileName];
-                    NSData *data = [[NSData alloc] initWithContentsOfFile:filePath];
-                    message.complete(data);
-                }
-                else if([type isEqualToString:@"clean"]){
-                    NSString *identifier = dict[@"id"];
-                    NSString *fileName = [self cachedFileNameForKey:identifier];
-                    NSString *filePath = [self cachePathForFileName:fileName];
-                    [[NSFileManager defaultManager] removeItemAtPath:filePath error:nil];
-                }
-                else if([type isEqualToString:@"clean_all"]){
-                    [[NSFileManager defaultManager] removeItemAtPath:self.cachePath error:nil];
-                    [[NSFileManager defaultManager] createDirectoryAtPath:self.cachePath withIntermediateDirectories:NO attributes:nil error:nil];
-                }
-            }
-        });
-        
-        _imageActor = co_actor_onqueue(_imageQueue, ^(COActorChan *channel) {
-            NSData *data = nil;
-            UIImage *image = nil;
-            COActorCompletable *completable = nil;
-            NSCache *memoryCache = [[NSCache alloc] init];
-            memoryCache.countLimit = 50;
-            for (COActorMessage *message in channel) {
-                image = nil;
-                NSString *url = [message stringType];
-                if (url.length > 0) {
-                    image = [memoryCache objectForKey:url];
-                    if (image) {
-                        message.complete(image);
-                        continue;
-                    }
-                    completable = [self.cacheActor sendMessage:@{@"type":@"load", @"id":url}];
-                    data = await(completable);
-                    if (data) {
-                        image = [[UIImage alloc] initWithData:data];
-                    }
-                    else{
-                        completable = [self.networkActor sendMessage:url];
-                        data = await(completable);
-                        if (data) {
-                            image = [[UIImage alloc] initWithData:data];
-                        }
-                    }
-                    message.complete(image);
-                    if (image) {
-                        [memoryCache setObject:image forKey:url];
-                    }
-                }
-                else{
-                    message.complete(nil);
-                }
-            }
-        });
-        _jsonActor = co_actor_onqueue(_jsonQueue, ^(COActorChan *channel) {
-            NSData *data = nil;
-            id json = nil;
-            COActorCompletable *completable = nil;
-            for (COActorMessage *message in channel) {
-                NSString *url = [message stringType];
-                json = nil;
-                if (url.length > 0) {
-                    completable = [self.networkActor sendMessage:url];
-                    data = await(completable);
-                    if (data) {
-                        json = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
-                    }
-                    message.complete(json);
-                }
-                else{
-                    message.complete(nil);
-                }
-            }
-        });
+//        _networkQueue = dispatch_queue_create("com.coobjc.network", NULL);
+//        _jsonQueue = dispatch_queue_create("com.coobjc.json", NULL);
+//        _cacheQueue = dispatch_queue_create("com.coobjc.cache", NULL);
+//        _imageQueue = dispatch_queue_create("com.coobjc.image", NULL);
+//        _networkActor = co_actor_onqueue(_networkQueue, ^(COActorChan *channel) {
+//            for (COActorMessage *message in channel) {
+//                NSString *url = [message stringType];
+//                if (url.length > 0) {
+//                    message.complete(await([self _getDataWithURL:url]));
+//                }
+//                else{
+//                    message.complete(nil);
+//                }
+//            }
+//        });
+//
+//        _cacheActor = co_actor_onqueue(_cacheQueue, ^(COActorChan *channel) {
+//            for (COActorMessage *message in channel) {
+//                NSDictionary *dict = [message dictType];
+//                NSString *type = dict[@"type"];
+//                if ([type isEqualToString:@"save"]) {
+//                    NSString *identifier = dict[@"id"];
+//                    NSData *data = dict[@"data"];
+//                    NSString *fileName = [self cachedFileNameForKey:identifier];
+//                    NSString *filePath = [self cachePathForFileName:fileName];
+//                    if (fileName.length > 0 && data.length > 0) {
+//                        if (![[NSFileManager defaultManager] fileExistsAtPath:self.cachePath]) {
+//                            [[NSFileManager defaultManager] createDirectoryAtPath:self.cachePath withIntermediateDirectories:NO attributes:nil error:nil];
+//                        }
+//                        [data writeToFile:filePath atomically:YES];
+//                    }
+//                }
+//                else if ([type isEqualToString:@"load"]) {
+//                    NSString *identifier = dict[@"id"];
+//                    NSString *fileName = [self cachedFileNameForKey:identifier];
+//                    NSString *filePath = [self cachePathForFileName:fileName];
+//                    NSData *data = [[NSData alloc] initWithContentsOfFile:filePath];
+//                    message.complete(data);
+//                }
+//                else if([type isEqualToString:@"clean"]){
+//                    NSString *identifier = dict[@"id"];
+//                    NSString *fileName = [self cachedFileNameForKey:identifier];
+//                    NSString *filePath = [self cachePathForFileName:fileName];
+//                    [[NSFileManager defaultManager] removeItemAtPath:filePath error:nil];
+//                }
+//                else if([type isEqualToString:@"clean_all"]){
+//                    [[NSFileManager defaultManager] removeItemAtPath:self.cachePath error:nil];
+//                    [[NSFileManager defaultManager] createDirectoryAtPath:self.cachePath withIntermediateDirectories:NO attributes:nil error:nil];
+//                }
+//            }
+//        });
+//
+//        _imageActor = co_actor_onqueue(_imageQueue, ^(COActorChan *channel) {
+//            NSData *data = nil;
+//            UIImage *image = nil;
+//            COActorCompletable *completable = nil;
+//            NSCache *memoryCache = [[NSCache alloc] init];
+//            memoryCache.countLimit = 50;
+//            for (COActorMessage *message in channel) {
+//                image = nil;
+//                NSString *url = [message stringType];
+//                if (url.length > 0) {
+//                    image = [memoryCache objectForKey:url];
+//                    if (image) {
+//                        message.complete(image);
+//                        continue;
+//                    }
+//                    completable = [self.cacheActor sendMessage:@{@"type":@"load", @"id":url}];
+//                    data = await(completable);
+//                    if (data) {
+//                        image = [[UIImage alloc] initWithData:data];
+//                    }
+//                    else{
+//                        completable = [self.networkActor sendMessage:url];
+//                        data = await(completable);
+//                        if (data) {
+//                            image = [[UIImage alloc] initWithData:data];
+//                        }
+//                    }
+//                    message.complete(image);
+//                    if (image) {
+//                        [memoryCache setObject:image forKey:url];
+//                    }
+//                }
+//                else{
+//                    message.complete(nil);
+//                }
+//            }
+//        });
+//        _jsonActor = co_actor_onqueue(_jsonQueue, ^(COActorChan *channel) {
+//            NSData *data = nil;
+//            id json = nil;
+//            COActorCompletable *completable = nil;
+//            for (COActorMessage *message in channel) {
+//                NSString *url = [message stringType];
+//                json = nil;
+//                if (url.length > 0) {
+//                    completable = [self.networkActor sendMessage:url];
+//                    data = await(completable);
+//                    if (data) {
+//                        json = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
+//                    }
+//                    message.complete(json);
+//                }
+//                else{
+//                    message.complete(nil);
+//                }
+//            }
+//        });
     }
     return self;
 }
