@@ -192,7 +192,7 @@ void coroutine_close_ifdead(coroutine_t *co) {
 __attribute__ ((optnone))
 static void coroutine_main(coroutine_t *co) {
     co->status = COROUTINE_RUNNING;// 异步任务开始执行的状态
-    co->entry(co);
+    co->entry(co);// 如果执行的任务里面yeid，就会进入COROUTINE_SUSPEND的状态
     co->status = COROUTINE_DEAD;// 异步任务执行完成的状态
     coroutine_setcontext(co->pre_context);
 }
@@ -208,13 +208,14 @@ void coroutine_resume_im(coroutine_t *co) {
             // get the pre context
             co->pre_context = malloc(sizeof(coroutine_ucontext_t));
             BOOL skip = false;
-            // 保存当前的环境, 当执行co协程任务后，会从这里返回
-            coroutine_getcontext(co->pre_context);
+            //  保存当前的环境
+            coroutine_getcontext(co->pre_context);// 退栈的时候，从这里执行 coroutine_setcontext(co->pre_context)
             if (skip) {
                 // when proccess reenter(resume a coroutine), skip the remain codes, just return to pre func.
                 return;
             }
 #pragma unused(skip)
+            // 下面类似进栈
             skip = true;
             
             free(co->context);
@@ -239,7 +240,7 @@ void coroutine_resume_im(coroutine_t *co) {
             skip = true;
             // setcontext
             coroutine_setcontext(co->context);
-            
+            // 从co->context的环境，唤醒任务。因为此时循环队列不为空，唤醒它，就会去到coroutine_yield 函数并且继续执行continue，从而执行刚刚增加的任务
             break;
         }
         default:
@@ -317,17 +318,17 @@ void coroutine_yield(coroutine_t *co)
 {
     if (co == NULL) {
         // if null
-        co = coroutine_self();
+        co = coroutine_self();// 获取循环队列任务co
     }
     BOOL skip = false;
-    coroutine_getcontext(co->context);// 保存当前异步任务的执行状态
+    coroutine_getcontext(co->context);// 保存当前异步任务的执行状态，这是co的任务队列为空。当 从coroutine_resume_im COROUTINE_SUSPEND恢复的时候，从这里返回
     if (skip) {
         return;
     }
 #pragma unused(skip)
     skip = true;
-    co->status = COROUTINE_SUSPEND;
-    coroutine_setcontext(co->pre_context);
+    co->status = COROUTINE_SUSPEND;// 修改处理循环任务的队列co设置为挂起状态
+    coroutine_setcontext(co->pre_context);// 退出循环处理这个状态，回到开始循环处理队列任务co的时候 coroutine_resume_im ready状态哪里。
 }
 
 __attribute__ ((optnone))
